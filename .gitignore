@@ -1,2 +1,4 @@
 configs
 .vscode
+/data
+*.pyc
