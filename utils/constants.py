@@ -7,3 +7,7 @@ class SIDE(Enum):
     BUY = "buy"
     SELL = "sell"
 
+
+class EXCHANGE(Enum):
+    OKX = "okx"
+    BINANCE = "binance"
