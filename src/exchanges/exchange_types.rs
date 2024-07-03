@@ -1,3 +1,3 @@
 pub enum FetchPositionParams {
-    OKX {margin_type: String}
+    OKX { margin_type: String },
 }

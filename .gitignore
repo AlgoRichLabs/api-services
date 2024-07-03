@@ -1,3 +1,7 @@
 /target
-/Cargo.lock
+/.idea
+
+Cargo.lock
 notes.md
+configs.json
+
