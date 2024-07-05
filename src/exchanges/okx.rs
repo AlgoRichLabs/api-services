@@ -1,14 +1,15 @@
+use crate::constants::Side;
 use anyhow::{anyhow, Error};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use chrono::Utc;
 use hmac::{Hmac, Mac};
 use reqwest::header::HeaderMap;
 use reqwest::StatusCode;
-use serde_json::{to_string, Value};
+use serde::{Deserialize, Serialize};
+use serde_json::to_string;
 use sha2::Sha256;
 use std::collections::HashMap;
 use std::string::String;
-use crate::constants::{Side};
 use url::form_urlencoded;
 
 use crate::exchanges::base::{BaseExchange, RestClient};
@@ -23,13 +24,53 @@ pub struct OkxExchange {
     rest_client: RestClient,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+struct Response {
+    code: String,
+    msg: String,
+    data: Vec<HashMap<String, DataValue>>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+enum DataValue {
+    ValueString(String),
+    ValueVector(Vec<HashMap<String, DataValue>>),
+}
+
+impl Response {
+    fn from_json(json: &str) -> Result<Self, Error> {
+        match serde_json::from_str(json) {
+            Ok(response) => Ok(response),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn get_nested_value(&self, keys: &[&str]) -> Option<&DataValue> {
+        let mut current = &self.data;
+        for (i, &key) in keys.iter().enumerate() {
+            if i == keys.len() - 1 {
+                return current.get(0).and_then(|map| map.get(key));
+            }
+            current = match current.get(0).and_then(|map| map.get(key)) {
+                Some(DataValue::ValueVector(vec)) => vec,
+                _ => return None,
+            }
+        }
+        None
+    }
+}
+
 impl OkxExchange {
     pub fn new(configs: &HashMap<String, String>) -> Self {
         let key: String = configs.get("key").unwrap().to_string();
         let secret: String = configs.get("secret").unwrap().to_string();
-        let passphrase:String = configs.get("passphrase").unwrap().to_string();
+        let passphrase: String = configs.get("passphrase").unwrap().to_string();
         let base_url: String = "https://www.okx.com".to_string();
-        let is_demo: bool = configs.get("is_demo").and_then(|s| s.parse::<bool>().ok()).unwrap_or(false);
+        let is_demo: bool = configs
+            .get("is_demo")
+            .and_then(|s| s.parse::<bool>().ok())
+            .unwrap_or(false);
         let rest_client: RestClient = RestClient::new();
 
         OkxExchange {
@@ -70,7 +111,6 @@ impl OkxExchange {
         if self.is_demo {
             headers.insert("x-simulated-trading", "1".parse().unwrap());
         }
-
         headers
     }
 
@@ -79,7 +119,7 @@ impl OkxExchange {
         method: &str,
         endpoint: &str,
         body: Option<HashMap<String, String>>,
-    ) -> Result<HashMap<String, String>, Error> {
+    ) -> Result<Vec<HashMap<String, DataValue>>, Error> {
         let query_string = match &body {
             Some(map) => {
                 let query = form_urlencoded::Serializer::new(String::new())
@@ -109,16 +149,16 @@ impl OkxExchange {
             .await?;
 
         let status: StatusCode = response.status();
-        let text = response.text().await?;
+        let response_text = response.text().await?;
+        let api_response: Response = Response::from_json(&response_text)?;
+
         if status.is_success() {
-            let result: HashMap<String, String> = serde_json::from_str(&text)?;
-            Ok(result)
+            Ok(api_response.data)
         } else {
             Err(anyhow!(
-                "{} request failed with status: {} and body: {}",
-                method,
-                status,
-                text
+                "API error: {} - {}",
+                api_response.code,
+                api_response.msg
             ))
         }
     }
@@ -140,17 +180,25 @@ impl BaseExchange for OkxExchange {
         let endpoint: &str = "/api/v5/account/balance";
         let response = self.send_request("GET", endpoint, None).await?;
 
-        let response_value: Value = serde_json::to_value(response)?;
+        if response.is_empty() {
+            return Err(anyhow!("No data returned from the API"));
+        }
 
-        if let Some(data) = response_value.get("data") {
-            if data.is_array() {
-                let balances: Vec<HashMap<String, String>> = serde_json::from_value(data.clone())?;
-                Ok(balances)
-            } else {
-                Err(anyhow!("Data is not an array."))
+        match &response[0].get("details") {
+            Some(DataValue::ValueVector(vec)) => {
+                let mut result: Vec<HashMap<String, String>> = Vec::new();
+                for map in vec {
+                    let mut balance_map = HashMap::new();
+                    for (key, value) in map {
+                        if let DataValue::ValueString(string_value) = value {
+                            balance_map.insert(key.clone(), string_value.clone());
+                        }
+                    }
+                    result.push(balance_map);
+                }
+                Ok(result)
             }
-        } else {
-            Err(anyhow!("No balance data found in the response."))
+            _ => Ok(Vec::new()),
         }
     }
 
