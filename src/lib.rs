@@ -6,7 +6,6 @@ pub mod utils;
 
 #[cfg(test)]
 mod tests {
-    use crate::exchanges::base::BaseExchange;
     use crate::exchanges::okx::OkxExchange;
     use serde_json::Value;
     use std::collections::HashMap;
@@ -41,15 +40,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_make_request() {
-        println!("Testing test_make_request method.");
+    async fn test_get_requests() {
+        println!("Testing get_balances method.");
         let configs: HashMap<String, String> = read_configs("configs.json", "okx_account");
         let okx_exchange = OkxExchange::new(&configs);
-        match okx_exchange.fetch_balances().await {
+        match okx_exchange.get_balances().await {
             Ok(balances) => {
                 println!("Balances: {:?}", balances);
             }
-            Err(e) => println!("Error fetching balances: {:?}", e),
+            Err(e) => println!("Error getting balances: {:?}", e),
+        }
+
+        println!("Testing get_positions_info method.");
+        match okx_exchange.get_positions_info().await {
+            Ok(positions_info) => {
+                println!("Positions Info: {:?}", positions_info);
+            }
+            Err(e) => println!("Error getting positions info: {:?}", e),
+        }
+
+        println!("Testing get_position_info method.");
+        match okx_exchange.get_position_info("XRP-USD-240927").await {
+            Ok(positions_info) => {
+                println!("Position Info: {:?}", positions_info)
+            }
+            Err(e) => println!("Error getting position info: {:?}", e),
         }
     }
 }

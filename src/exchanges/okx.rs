@@ -1,4 +1,4 @@
-use crate::constants::Side;
+use crate::exchanges::base::RestClient;
 use anyhow::{anyhow, Error};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use chrono::Utc;
@@ -11,9 +11,6 @@ use sha2::Sha256;
 use std::collections::HashMap;
 use std::string::String;
 use url::form_urlencoded;
-
-use crate::exchanges::base::{BaseExchange, RestClient};
-use crate::exchanges::exchange_types::FetchPositionParams;
 
 pub struct OkxExchange {
     key: String,
@@ -83,16 +80,85 @@ impl OkxExchange {
         }
     }
 
+    // Get Methods
+    pub async fn get_balances(&self) -> Result<Vec<HashMap<String, String>>, Error> {
+        let endpoint: &str = "/api/v5/account/balance";
+        let response = self.send_request("GET", endpoint, None).await?;
+        if response.is_empty() {
+            return Err(anyhow!("No data returned from the API"));
+        }
+
+        match &response[0].get("details") {
+            Some(DataValue::ValueVector(vec)) => {
+                let mut result: Vec<HashMap<String, String>> = Vec::new();
+                for map in vec {
+                    let mut balance_map = HashMap::new();
+                    for (key, value) in map {
+                        if let DataValue::ValueString(string_value) = value {
+                            balance_map.insert(key.clone(), string_value.clone());
+                        }
+                    }
+                    result.push(balance_map);
+                }
+                Ok(result)
+            }
+            _ => Ok(Vec::new()),
+        }
+    }
+
+    pub async fn get_positions_info(&self) -> Result<Vec<HashMap<String, String>>, Error> {
+        let endpoint: &str = "/api/v5/account/positions";
+        let response = self.send_request("GET", endpoint, None).await?;
+        let mut result: Vec<HashMap<String, String>> = Vec::new();
+        for item in &response {
+            let mut position_map: HashMap<String, String> = HashMap::new();
+            for (key, value) in item {
+                if let DataValue::ValueString(s) = value {
+                    position_map.insert(key.clone(), s.clone());
+                }
+            }
+            result.push(position_map);
+        }
+        Ok(result)
+    }
+
+    pub async fn get_position_info(
+        &self,
+        instrument_id: &str,
+    ) -> Result<HashMap<String, String>, Error> {
+        let endpoint: &str = "/api/v5/account/positions";
+        let mut params: HashMap<String, String> = HashMap::new();
+        params.insert("instId".to_string(), instrument_id.to_string());
+        let response: Vec<HashMap<String, DataValue>> =
+            self.send_request("GET", endpoint, Some(params)).await?;
+        if response.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let mut result: HashMap<String, String> = HashMap::new();
+        for (key, value) in &response[0] {
+            if let DataValue::ValueString(s) = value {
+                result.insert(key.clone(), s.clone());
+            }
+        }
+
+        Ok(result)
+    }
+
+    // Helper Functions:
     // Signature definition is specific to the exchange
     fn generate_signature(
         &self,
         method: &str,
-        url: &str,
+        end_point: &str,
         query_string: &str,
         body: &str,
     ) -> (String, String) {
         let timestamp = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-        let pre_hash = format!("{}{}{}{}{}", timestamp, method, url, query_string, body);
+        let pre_hash = format!(
+            "{}{}{}{}{}",
+            timestamp, method, end_point, query_string, body
+        );
         let mut mac = Hmac::<Sha256>::new_from_slice(self.secret.as_bytes()).unwrap();
         mac.update(pre_hash.as_bytes());
         let signature = mac.finalize().into_bytes();
@@ -118,24 +184,29 @@ impl OkxExchange {
         &self,
         method: &str,
         endpoint: &str,
-        body: Option<HashMap<String, String>>,
+        params: Option<HashMap<String, String>>,
     ) -> Result<Vec<HashMap<String, DataValue>>, Error> {
-        let query_string = match &body {
-            Some(map) => {
-                let query = form_urlencoded::Serializer::new(String::new())
-                    .extend_pairs(map)
-                    .finish();
-                format!("?{}", query)
+        let (query_string, body_string, body) = match method {
+            "GET" => {
+                let qs = match &params {
+                    Some(map) => format!(
+                        "?{}",
+                        form_urlencoded::Serializer::new(String::new())
+                            .extend_pairs(map)
+                            .finish()
+                    ),
+                    None => String::new(),
+                };
+                (qs, String::new(), None)
             }
-            None => String::new(),
-        };
-
-        let body_string = match method {
-            "POST" => match &body {
-                Some(map) => to_string(map).unwrap_or_else(|_| String::new()),
-                None => String::new(),
-            },
-            _ => String::new(),
+            "POST" | "DELETE" => {
+                let bs = match &params {
+                    Some(map) => to_string(map).unwrap_or_else(|_| String::new()),
+                    None => String::new(),
+                };
+                (String::new(), bs, params)
+            }
+            _ => return Err(anyhow!("Invalid Method.")),
         };
 
         let (encoded_signature, timestamp) =
@@ -161,48 +232,5 @@ impl OkxExchange {
                 api_response.msg
             ))
         }
-    }
-}
-
-impl BaseExchange for OkxExchange {
-    async fn get_ticker(&self, symbol: &str) -> Result<HashMap<String, String>, Error> {
-        todo!()
-    }
-
-    async fn fetch_positions(
-        &self,
-        params: FetchPositionParams,
-    ) -> Result<Vec<HashMap<String, String>>, Error> {
-        todo!()
-    }
-
-    async fn fetch_balances(&self) -> Result<Vec<HashMap<String, String>>, Error> {
-        let endpoint: &str = "/api/v5/account/balance";
-        let response = self.send_request("GET", endpoint, None).await?;
-
-        if response.is_empty() {
-            return Err(anyhow!("No data returned from the API"));
-        }
-
-        match &response[0].get("details") {
-            Some(DataValue::ValueVector(vec)) => {
-                let mut result: Vec<HashMap<String, String>> = Vec::new();
-                for map in vec {
-                    let mut balance_map = HashMap::new();
-                    for (key, value) in map {
-                        if let DataValue::ValueString(string_value) = value {
-                            balance_map.insert(key.clone(), string_value.clone());
-                        }
-                    }
-                    result.push(balance_map);
-                }
-                Ok(result)
-            }
-            _ => Ok(Vec::new()),
-        }
-    }
-
-    async fn get_bbo_price(&self, symbol: &str, side: Side) -> Result<f64, Error> {
-        todo!()
     }
 }

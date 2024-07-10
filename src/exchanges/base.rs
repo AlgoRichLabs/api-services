@@ -2,22 +2,7 @@ use anyhow::{anyhow, Error};
 use reqwest;
 use reqwest::header::HeaderMap;
 use std::collections::HashMap;
-
-use crate::constants::Side;
-use crate::exchanges::exchange_types::FetchPositionParams;
-
-pub trait BaseExchange {
-    async fn get_ticker(&self, symbol: &str) -> Result<HashMap<String, String>, Error>;
-
-    async fn fetch_positions(
-        &self,
-        params: FetchPositionParams,
-    ) -> Result<Vec<HashMap<String, String>>, Error>;
-
-    async fn fetch_balances(&self) -> Result<Vec<HashMap<String, String>>, Error>;
-
-    async fn get_bbo_price(&self, symbol: &str, side: Side) -> Result<f64, Error>;
-}
+pub trait BaseExchange {}
 
 // Every exchange api wrapper needs to send requests.
 pub struct RestClient {
@@ -54,7 +39,9 @@ impl RestClient {
             req = req.json(&b);
         }
 
-        let res = req.send().await?;
-        Ok(res)
+        match req.send().await {
+            Ok(res) => Ok(res),
+            Err(e) => Err(anyhow!("Request error:{}", e)),
+        }
     }
 }
