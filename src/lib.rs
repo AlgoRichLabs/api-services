@@ -41,9 +41,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_requests() {
-        println!("Testing get_balances method.");
         let configs: HashMap<String, String> = read_configs("configs.json", "okx_account");
         let okx_exchange = OkxExchange::new(&configs);
+
+        println!("Testing get_account_info method.");
+        match okx_exchange.get_account_info().await {
+            Ok(account_info) => println!("Account info: {:?}", account_info),
+            Err(e) => println!("Error getting account info: {:?}", e),
+        }
+
+        println!("Testing get_balances method.");
         match okx_exchange.get_balances().await {
             Ok(balances) => {
                 println!("Balances: {:?}", balances);

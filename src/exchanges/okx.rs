@@ -81,6 +81,24 @@ impl OkxExchange {
     }
 
     // Get Methods
+    pub async fn get_account_info(&self) -> Result<HashMap<String, String>, Error> {
+        let endpoint: &str = "/api/v5/account/balance";
+        let response = self.send_request("GET", endpoint, None).await?;
+        if response.is_empty() {
+            return Err(anyhow!("No data returned from the API"));
+        }
+
+        let mut result: HashMap<String, String> = HashMap::new();
+
+        for (key, value) in &response[0] {
+            if let DataValue::ValueString(string_value) = value {
+                result.insert(key.clone(), string_value.clone());
+            }
+        }
+
+        Ok(result)
+    }
+
     pub async fn get_balances(&self) -> Result<Vec<HashMap<String, String>>, Error> {
         let endpoint: &str = "/api/v5/account/balance";
         let response = self.send_request("GET", endpoint, None).await?;
