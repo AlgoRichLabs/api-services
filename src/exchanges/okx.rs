@@ -99,6 +99,28 @@ impl OkxExchange {
         Ok(result)
     }
 
+    pub async fn get_total_equity(&self) -> Result<f64, Error> {
+        let account_info: HashMap<String, String> = self.get_account_info().await?;
+        let total_equity: f64 = if let Some(equity_str) = account_info.get("totalEq") {
+            equity_str.parse().unwrap()
+        } else {
+            return Err(anyhow!("Key error when getting total equity."));
+        };
+
+        Ok(total_equity)
+    }
+
+    pub async fn get_maintenance_margin_ratio(&self) -> Result<f64, Error> {
+        let account_info: HashMap<String, String> = self.get_account_info().await?;
+        let mmr: f64 = if let Some(mmr_string) = account_info.get("mmr") {
+            mmr_string.parse().unwrap()
+        } else {
+            return Err(anyhow!("Key error when getting maintenance margin ratio."));
+        };
+
+        Ok(mmr)
+    }
+
     pub async fn get_balances(&self) -> Result<Vec<HashMap<String, String>>, Error> {
         let endpoint: &str = "/api/v5/account/balance";
         let response = self.send_request("GET", endpoint, None).await?;

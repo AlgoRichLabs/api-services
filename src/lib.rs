@@ -50,6 +50,18 @@ mod tests {
             Err(e) => println!("Error getting account info: {:?}", e),
         }
 
+        println!("Testing get_total_equity method");
+        match okx_exchange.get_total_equity().await {
+            Ok(total_equity) => println!("Account total equity: {:?}", total_equity),
+            Err(e) => println!("Error getting total equity."),
+        }
+
+        println!("Testing get_maintenance_margin_ratio method");
+        match okx_exchange.get_maintenance_margin_ratio().await {
+            Ok(mmr) => println!("Account maintenance margin ratio: {:?}", mmr),
+            Err(e) => println!("Error getting maintenance margin ratio.")
+        }
+
         println!("Testing get_balances method.");
         match okx_exchange.get_balances().await {
             Ok(balances) => {
