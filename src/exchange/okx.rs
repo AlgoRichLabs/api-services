@@ -1,6 +1,6 @@
-use crate::exchanges::base::RestClient;
+use crate::exchange::base::RestClient;
 use anyhow::{anyhow, Error};
-use base64::{engine::general_purpose::STANDARD, Engine as _};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::Utc;
 use hmac::{Hmac, Mac};
 use reqwest::header::HeaderMap;

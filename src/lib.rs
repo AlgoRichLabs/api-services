@@ -1,16 +1,14 @@
-pub mod brokers;
+pub mod broker;
 pub mod constants;
-pub mod errors;
-pub mod exchanges;
+pub mod exchange;
 pub mod utils;
 
 #[cfg(test)]
 mod tests {
-    use crate::exchanges::okx::OkxExchange;
+    use crate::exchange::okx::OkxExchange;
     use serde_json::Value;
     use std::collections::HashMap;
     use std::fs;
-    use std::hash::Hash;
     use std::string::String;
     use tokio;
 
@@ -40,7 +38,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_requests() {
+    async fn test_okx_get_requests() {
         let configs: HashMap<String, String> = read_configs("configs.json", "okx_account");
         let okx_exchange = OkxExchange::new(&configs);
 
