@@ -1,6 +1,5 @@
 pub mod broker;
 pub mod constants;
-pub mod errors;
 pub mod exchange;
 pub mod utils;
 
@@ -10,7 +9,6 @@ mod tests {
     use serde_json::Value;
     use std::collections::HashMap;
     use std::fs;
-    use std::hash::Hash;
     use std::string::String;
     use tokio;
 
