@@ -42,20 +42,6 @@ impl Response {
             Err(e) => Err(e.into()),
         }
     }
-
-    fn get_nested_value(&self, keys: &[&str]) -> Option<&DataValue> {
-        let mut current = &self.data;
-        for (i, &key) in keys.iter().enumerate() {
-            if i == keys.len() - 1 {
-                return current.get(0).and_then(|map| map.get(key));
-            }
-            current = match current.get(0).and_then(|map| map.get(key)) {
-                Some(DataValue::ValueVector(vec)) => vec,
-                _ => return None,
-            }
-        }
-        None
-    }
 }
 
 impl OkxExchange {
